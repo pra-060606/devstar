@@ -1,23 +1,9 @@
 {
     "name": "Email Header Analyzer",
-    "description":"",
+    "description":"This tool will make email headers human readable by parsing them according to RFC 822. Email headers are present on every email you receive via the Internet and can provide valuable diagnostic information like hop delays, authentication results, and more.",
     "contributors": [{
-        "name": "",
-        "githubId": ""
-    }, {
-        "name": "",
-        "githubId": ""
-    },
-    {
-        "name": "",
-        "githubId": ""
-    },
-    {
-        "name": "",
-        "githubId": ""
-    },
-    {
-        "name": "",
-        "githubId": ""
+        "name": "umesh munde",
+        "githubId": "https://github.com/umeshmunde"
+   
     }]
 }
