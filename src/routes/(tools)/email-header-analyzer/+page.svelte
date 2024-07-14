@@ -11,41 +11,58 @@
     spf: '',
     dkim: '',
     dmarc: '',
-    headers: []
+    headers: [],
+    hops: []
   });
 
   // Functions
   function parseHeaders(headers) {
-  try {
-    const parsedHeaders = [];
-    let currentKey = null;
-    let currentValue = "";
-    const delimiters = [':', '=', ' ']; 
-    headers.split('\n').forEach(line => {
-      if ( /^\s+/.test(line) ) {
-        currentValue += line.trim();
-      } else {
-        if (currentKey) {
-          parsedHeaders.push({ key: currentKey, value: currentValue.trim() });
+    try {
+      const parsedHeaders = [];
+      let currentKey = null;
+      let currentValue = "";
+      const delimiters = [':', '=', ' '];
+      headers.split('\n').forEach(line => {
+        if (/^\s+/.test(line)) {
+          currentValue += line.trim();
+        } else {
+          if (currentKey) {
+            parsedHeaders.push({ key: currentKey, value: currentValue.trim() });
+          }
+          const parts = line.split(new RegExp(delimiters.join('|'), 'g'));
+          currentKey = parts[0].trim();
+          currentValue = parts.slice(1).join(' ').trim();
         }
-        const parts = line.split(new RegExp(delimiters.join('|'), 'g'));
-        currentKey = parts[0].trim();
-        currentValue = parts.slice(1).join(' ').trim();
+      });
+
+      // Add the last header if any
+      if (currentKey) {
+        parsedHeaders.push({ key: currentKey, value: currentValue.trim() });
       }
-    });
 
-    // Add the last header if any
-    if (currentKey) {
-      parsedHeaders.push({ key: currentKey, value: currentValue.trim() });
+      return parsedHeaders;
+    } catch (err) {
+      console.error('Error parsing headers:', err.message);
+      return [];
     }
-
-    return parsedHeaders;
-  } catch (err) {
-    console.error('Error parsing headers:', err.message);
-    return [];
   }
-}
 
+  function formatDate(date) {
+    return date.toLocaleString('en-IN', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      hour12: true
+    });
+  }
+
+  function isBlacklisted(from) {
+    // Replace with your logic to determine if the server is blacklisted
+    return from.toLowerCase().includes('blacklist');
+  }
 
   function analyzeHeaders() {
     const headers = parseHeaders($rawHeaders);
@@ -61,10 +78,28 @@
     const dmarc = headers.find(header => header.key.toLowerCase() === 'authentication-results')?.value || 'N/A';
 
     let receivedDelay = 0;
+    let hops = [];
     if (receivedHeaders.length >= 2) {
       try {
         const receivedTimes = receivedHeaders.map(header => new Date(header.value.split(';').pop().trim()).getTime());
         receivedDelay = Math.floor((Math.max(...receivedTimes) - Math.min(...receivedTimes)) / 1000);
+
+        // Parse hop information
+        hops = receivedHeaders.map((header, index) => {
+          const parts = header.value.split(';');
+          const date = new Date(parts.pop().trim());
+          const details = parts.join(';');
+          const hopInfo = {
+            hop: index + 1,
+            delay: index === 0 ? 0 : Math.floor((date.getTime() - new Date(receivedHeaders[index - 1].value.split(';').pop().trim()).getTime()) / 1000),
+            from: details.match(/from\s+([^;\s]+)/i)?.[1] || 'N/A',
+            by: details.match(/by\s+([^;\s]+)/i)?.[1] || 'N/A',
+            with: details.match(/with\s+([^;\s]+)/i)?.[1] || 'N/A',
+            time: formatDate(date),
+            blacklist: isBlacklisted(details.match(/from\s+([^;\s]+)/i)?.[1] || 'N/A') ? '✔' : '❌'
+          };
+          return hopInfo;
+        });
       } catch (e) {
         error.set('Error parsing dates in Received headers.');
         return;
@@ -77,7 +112,8 @@
       spf,
       dkim,
       dmarc,
-      headers
+      headers,
+      hops
     });
 
     step.set(2);
@@ -138,6 +174,19 @@
     color: red;
     margin-bottom: 10px;
   }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+  th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+  }
+  th {
+    background-color: #f2f2f2;
+  }
 </style>
 
 {#if $step === 1}
@@ -159,12 +208,37 @@
   <div class="app">
     <h2>Header Analyzed</h2>
     
-      
-      <p>Email Subject: {$analysisResult.subject}</p>
+    <p>Email Subject: {$analysisResult.subject}</p>
    
     <div class="result-section">
       <h3>Relay Information</h3>
       <p>Received Delay: {$analysisResult.receivedDelay} seconds</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Hop</th>
+            <th>Delay</th>
+            <th>From</th>
+            <th>By</th>
+            <th>With</th>
+            <th>Time</th>
+            <th>Blacklist</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each $analysisResult.hops as hop}
+            <tr>
+              <td>{hop.hop}</td>
+              <td>{hop.delay}</td>
+              <td>{hop.from}</td>
+              <td>{hop.by}</td>
+              <td>{hop.with}</td>
+              <td>{hop.time}</td>
+              <td>{hop.blacklist}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
     </div>
     <div class="result-section">
       <h3>SPF, DKIM, and DMARC Information</h3>
