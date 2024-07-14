@@ -59,34 +59,16 @@
     const spf = headers.find(header => header.key.toLowerCase() === 'received-spf')?.value || 'N/A';
     const dkim = headers.find(header => header.key.toLowerCase() === 'dkim-signature')?.value || 'N/A';
     const dmarc = headers.find(header => header.key.toLowerCase() === 'authentication-results')?.value || 'N/A';
-  
 
     let receivedDelay = 0;
     if (receivedHeaders.length >= 2) {
       try {
-        const receivedTimes = receivedHeaders.map(header => {
-          const timestamp = new Date(header.value.split(';').pop().trim()).getTime();
-          // Check if timestamp is valid (not NaN) before adding it to receivedTimes
-          if (!isNaN(timestamp)) {
-            return timestamp;
-          } else {
-            console.warn('Invalid timestamp found in Received header:', header.value);
-            return null; // Or any placeholder value to indicate an error
-          }
-        });
-
-        // Filter out any invalid timestamps (null values) before calculating delay
-        const validTimes = receivedTimes.filter(time => time !== null);
-        if (validTimes.length >= 2) {
-          receivedDelay = Math.floor((Math.max(...validTimes) - Math.min(...validTimes)) / 1000);
-        } else {
-          console.warn('Unable to calculate Received Delay due to invalid timestamps in headers');
-        }
+        const receivedTimes = receivedHeaders.map(header => new Date(header.value.split(';').pop().trim()).getTime());
+        receivedDelay = Math.floor((Math.max(...receivedTimes) - Math.min(...receivedTimes)) / 1000);
       } catch (e) {
         error.set('Error parsing dates in Received headers.');
         return;
       }
-
     }
 
     analysisResult.set({
@@ -176,8 +158,10 @@
 {:else if $step === 2}
   <div class="app">
     <h2>Header Analyzed</h2>
-    <p>Email Subject: {$analysisResult.subject}</p>
     
+      
+      <p>Email Subject: {$analysisResult.subject}</p>
+   
     <div class="result-section">
       <h3>Relay Information</h3>
       <p>Received Delay: {$analysisResult.receivedDelay} seconds</p>
@@ -185,21 +169,11 @@
     <div class="result-section">
       <h3>SPF, DKIM, and DMARC Information</h3>
       <ul>
-        <li>
-          <strong>SPF:</strong> 
-          <span>{$analysisResult.spf}</span>
-          </li>
-        <li>
-          <strong>DKIM:</strong> 
-          <span>{$analysisResult.dkim}</span>
-          </li>
-        <li>
-          <strong>DMARC:</strong> 
-          <span>{$analysisResult.dmarc}</span>
-          </li>
+        <li><strong>SPF:</strong> {$analysisResult.spf}</li>
+        <li><strong>DKIM:</strong> {$analysisResult.dkim}</li>
+        <li><strong>DMARC:</strong> {$analysisResult.dmarc}</li>
       </ul>
     </div>
-    
     <div class="result-section">
       <h3>Headers Found</h3>
       <ul>
